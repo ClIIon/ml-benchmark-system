@@ -1,0 +1,232 @@
+<template>
+  <el-container class="app-container">
+    <!-- 顶部标题 -->
+    <el-header>
+      <h1>机器学习经典十大算法 Benchmark 可视化平台</h1>
+    </el-header>
+
+    <el-main>
+      <!-- 数据集选择 -->
+      <el-card class="card">
+        <h3>选择数据集</h3>
+        <el-select v-model="selectedDataset" placeholder="请选择数据集" @change="onDatasetChange">
+          <el-option v-for="d in datasets" :key="d.value" :label="d.label" :value="d.value" />
+        </el-select>
+      </el-card>
+
+      <!-- 算法选择 + 启动按钮 -->
+      <el-card class="card" v-if="selectedDataset">
+        <h3>选择算法</h3>
+        <el-select
+          v-model="selectedModel"
+          placeholder="请选择算法"
+          :key="selectedDataset"
+          style="width: 300px"
+        >
+          <el-option v-for="m in modelsForDataset" :key="m.value" :label="m.label" :value="m.value" />
+        </el-select>
+
+        <div style="margin-top: 20px; text-align: center;">
+          <el-button type="primary" @click="runBenchmark">
+            🚀 运行 Benchmark
+          </el-button>
+        </div>
+      </el-card>
+
+      <!-- 进度提示 -->
+      <el-card class="card" v-if="progressMsg">
+        <h3>运行进度</h3>
+        <p>{{ progressMsg }}</p>
+	<el-progress :percentage="progressPercent" :status="progressPercent < 100 ? '' : 'success'" />
+          striped
+          striped-flow
+      </el-card>
+
+      <!-- 指标结果展示 -->
+      <el-card class="card" v-if="lastMetrics">
+        <h3>当前算法评估指标</h3>
+        <el-table :data="metricsTable" border>
+          <el-table-column prop="metric" label="指标" />
+          <el-table-column prop="value" label="数值" />
+        </el-table>
+      </el-card>
+
+      <!-- 柱状图 -->
+      <el-card class="card" v-if="true">
+        <h3>评估指标对比柱状图</h3>
+        <div ref="barChart" style="width:800px; height:400px; background:#eee;"></div>
+      </el-card>
+    </el-main>
+  </el-container>
+</template>
+
+<script setup>
+import { ref, nextTick, onMounted } from "vue";
+import * as echarts from "echarts";
+import { io } from "socket.io-client";   // ✅ WebSocket
+
+const datasets = [
+  { label: "乳腺癌", value: "breast_cancer" },
+  { label: "葡萄酒", value: "wine" },
+  { label: "波士顿房价", value: "boston" },
+  { label: "Fashion-MNIST", value: "fashion_mnist" },
+];
+
+const datasetModels = {
+  breast_cancer: [
+    { label: "逻辑回归", value: "logistic_regression" },
+    { label: "决策树", value: "decision_tree" },
+    { label: "随机森林", value: "random_forest" },
+    { label: "SVM", value: "svm" },
+    { label: "KNN", value: "knn" },
+    { label: "朴素贝叶斯", value: "naive_bayes" },
+    { label: "GBDT", value: "gbdt" },
+  ],
+  wine: [
+    { label: "逻辑回归", value: "logistic_regression" },
+    { label: "决策树", value: "decision_tree" },
+    { label: "随机森林", value: "random_forest" },
+    { label: "SVM", value: "svm" },
+    { label: "KNN", value: "knn" },
+    { label: "朴素贝叶斯", value: "naive_bayes" },
+  ],
+  boston: [
+    { label: "线性回归", value: "linear_regression" },
+    { label: "决策树", value: "decision_tree" },
+    { label: "随机森林", value: "random_forest" },
+    { label: "GBDT", value: "gbdt" },
+  ],
+  fashion_mnist: [
+    { label: "逻辑回归", value: "logistic_regression" },
+    { label: "SVM", value: "svm" },
+    { label: "KNN", value: "knn" },
+    { label: "K-means", value: "kmeans" },
+    { label: "PCA", value: "pca" },
+  ],
+};
+
+const selectedDataset = ref("");
+const selectedModel = ref("");
+const modelsForDataset = ref([]);
+
+const allResults = ref([]); // 存储所有运行结果
+const lastMetrics = ref(null);
+const metricsTable = ref([]);
+const progressMsg = ref("");
+
+const barChart = ref(null);
+let chartInstance = null;
+
+// ✅ 建立 WebSocket 连接
+const socket = io("http://127.0.0.1:5000");
+
+onMounted(() => {
+  if (barChart.value) {
+    chartInstance = echarts.init(barChart.value);
+    window.addEventListener("resize", () => chartInstance.resize());
+  }
+
+  // 监听进度
+  socket.on("progress", (msg) => {
+    progressMsg.value = msg.status;
+  });
+
+  // 监听结果
+  socket.on("result", async (res) => {
+    lastMetrics.value = res.metrics;
+    metricsTable.value = Object.entries(lastMetrics.value).map(([k, v]) => ({
+      metric: k,
+      value: typeof v === "number" ? v.toFixed(4) : v,
+    }));
+
+    const idx = allResults.value.findIndex(r => r.model === res.model);
+    if (idx !== -1) {
+      allResults.value[idx].metrics = lastMetrics.value;
+    } else {
+      allResults.value.push({ model: res.model, metrics: lastMetrics.value });
+    }
+
+    console.log("allResults:", allResults.value);
+
+    await nextTick();
+    updateBarChart(allResults.value);
+  });
+
+  socket.on("error", (err) => {
+    alert(err.error);
+  });
+});
+
+function onDatasetChange() {
+  selectedModel.value = "";
+  modelsForDataset.value = datasetModels[selectedDataset.value] || [];
+  allResults.value = [];
+  lastMetrics.value = null;
+  metricsTable.value = [];
+  progressMsg.value = "";
+  if (chartInstance) chartInstance.clear();
+}
+
+function runBenchmark() {
+  if (!selectedDataset.value || !selectedModel.value) {
+    alert("请先选择数据集和算法！");
+    return;
+  }
+
+  progressMsg.value = "任务已提交...";
+  socket.emit("run_benchmark", {
+    dataset: selectedDataset.value,
+    model: selectedModel.value,
+  });
+}
+
+function updateBarChart(results) {
+  if (!chartInstance) {
+    console.warn("ECharts 未初始化");
+    return;
+  }
+  console.log("更新图表数据:", results);
+
+  const metricsSet = new Set();
+  results.forEach(r => {
+    Object.keys(r.metrics).forEach(k => {
+      if (typeof r.metrics[k] === "number") {
+        metricsSet.add(k);
+      }
+    });
+  });
+  const metricKeys = Array.from(metricsSet);
+
+  const series = results.map((r, idx) => ({
+    name: r.model,
+    type: "bar",
+    data: metricKeys.map(k => (typeof r.metrics[k] === "number" ? r.metrics[k] : 0)),
+  }));
+
+  const option = {
+    tooltip: { trigger: "axis" },
+    legend: { data: results.map(r => r.model) },
+    xAxis: { type: "category", data: metricKeys },
+    yAxis: {
+      type: "value",
+      min: val => val.min - 0.05,
+      max: val => val.max + 0.05,
+      scale: true,
+    },
+    series,
+  };
+
+  console.log("ECharts option:", option);
+  chartInstance.setOption(option);
+}
+</script>
+
+<style>
+.app-container {
+  margin: 20px;
+}
+.card {
+  margin: 20px 0;
+  padding: 15px;
+}
+</style>

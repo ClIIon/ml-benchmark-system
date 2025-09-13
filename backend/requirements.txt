@@ -1,0 +1,10 @@
+flask
+flask-cors
+flask-socketio
+eventlet
+numpy
+scikit-learn
+# For TF-backed datasets (fashion_mnist / mnist / cifar10), choose ONE of the following based on your OS:
+# tensorflow            # Linux/Windows CPU
+# tensorflow-macos      # macOS Apple Silicon
+# tensorflow-metal      # macOS Apple Silicon GPU acceleration
