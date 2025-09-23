@@ -11,10 +11,10 @@ def evaluate_classification(model, X, y, seed=None):
     results = {
         "accuracy": accuracy_score(y_test, y_pred),
         "precision": precision_score(y_test, y_pred, average="weighted", zero_division=0),
-        "recall": recall_score(y_test, y_pred, average="weighted", zero_division=0),
-        "f1": f1_score(y_test, y_pred, average="weighted", zero_division=0)
+        "recall": recall_score(y_test, y_pred, average="macro", zero_division=0),
+        "f1": f1_score(y_test, y_pred, average="macro", zero_division=0)
     }
-
+    print(results)
     # AUC
     try:
         if hasattr(model, "predict_proba"):

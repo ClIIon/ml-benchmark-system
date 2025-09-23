@@ -10,5 +10,5 @@ def evaluate_dim_reduction(model, X, seed=None):
         evr = model.explained_variance_ratio_
         results["Explained Variance Ratio"] = evr.tolist()
         results["Cumulative EVR"] = float(np.cumsum(evr)[-1])
-
+    print(results)
     return results

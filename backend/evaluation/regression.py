@@ -18,4 +18,5 @@ def evaluate_regression(model, X, y, seed=None):
         "residuals": (y_test - y_pred).tolist(),
         "scatter": np.column_stack([y_test, y_pred]).tolist()
     }
+    print(results)
     return results

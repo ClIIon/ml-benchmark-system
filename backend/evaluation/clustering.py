@@ -18,5 +18,5 @@ def evaluate_clustering(model, X, seed=None):
     pca = PCA(n_components=2, random_state=seed)
     X_2d = pca.fit_transform(X)
     results["scatter"] = np.column_stack([X_2d, labels]).tolist()
-
+    print(results)
     return results
